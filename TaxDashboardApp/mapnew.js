@@ -138,15 +138,24 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 
   //Make function to execture query
-  var loadAdditionalData = function () {
-    ////Create a new query object and give it the correct properties for what you want
-    let additionalQuery = medianIncomeLayer.createQuery();
-    additionalQuery.returnGeometry = false;
-    additionalQuery.outFields = "*"
-    ////execute query on your new layer
-    medianIncomeLayer.queryFeatures(additionalQuery).then(function (r) {
-      console.log(r)
-      r.features.forEach(function (feature) {
+  //the service holds 52 records but each request returns at most 50,
+  //so we page through results with start and exceededTransferLimit until every record is loaded
+  var loadAdditionalData = async function () {
+    var allFeatures = [];
+    var more = true;
+    while (more) {
+      ////Create a new query object and give it the correct properties for what you want
+      let additionalQuery = medianIncomeLayer.createQuery();
+      additionalQuery.returnGeometry = false;
+      additionalQuery.outFields = "*";
+      additionalQuery.start = allFeatures.length;
+      ////execute query on your new layer
+      let r = await medianIncomeLayer.queryFeatures(additionalQuery);
+      allFeatures.push.apply(allFeatures, r.features);
+      more = (r.exceededTransferLimit === true && r.features.length > 0);
+    }
+    try {
+      allFeatures.forEach(function (feature) {
         // prefer matching by postal abbreviation (STUSPS)
         var abbr = feature.attributes && feature.attributes['STUSPS'];
         if (!abbr || abbr === "DC") return;
@@ -181,11 +190,12 @@ window.addEventListener("DOMContentLoaded", () => {
         if (submitBtn) submitBtn.disabled = false;
         console.log('All data loaded — submit enabled');
       }
-    }).catch(function (err) {
+  }
+  catch (err) {
       console.error('loadAdditionalData failed:', err);
       medianLoaded = true;
       if (submitBtn) submitBtn.disabled = false;
-    })
+  }
   }
 
   loadAdditionalData()
@@ -201,12 +211,21 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 
   // query the poverty service and save the rate into stateObj[stateKey].povertyRate
-  var loadPovertyData = function () {
-    let povertyQuery = povertyLayer.createQuery();
-    povertyQuery.returnGeometry = false;
-    povertyQuery.outFields = ["STUSPS", "B17020_001E", "B17020_002E"];
-    povertyLayer.queryFeatures(povertyQuery).then(function (r) {
-      r.features.forEach(function (feature) {
+  // pages through the results the same way as loadAdditionalData so no state is missed
+  var loadPovertyData = async function () {
+    var allFeatures = [];
+    var more = true;
+    while (more) {
+      let povertyQuery = povertyLayer.createQuery();
+      povertyQuery.returnGeometry = false;
+      povertyQuery.outFields = ["STUSPS", "B17020_001E", "B17020_002E"];
+      povertyQuery.start = allFeatures.length;
+      let r = await povertyLayer.queryFeatures(povertyQuery);
+      allFeatures.push.apply(allFeatures, r.features);
+      more = (r.exceededTransferLimit === true && r.features.length > 0);
+    }
+    try {
+      allFeatures.forEach(function (feature) {
         var abbr = feature.attributes && feature.attributes['STUSPS'];
         if (!abbr || abbr === "DC") return;
 
@@ -232,11 +251,12 @@ window.addEventListener("DOMContentLoaded", () => {
         if (submitBtn) submitBtn.disabled = false;
         console.log('All data loaded — submit enabled');
       }
-    }).catch(function (err) {
+    }
+    catch (err) {
       console.error('loadPovertyData failed:', err);
       povertyLoaded = true;
       if (submitBtn) submitBtn.disabled = false;
-    })
+    }
   }
 
   loadPovertyData()
